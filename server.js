@@ -226,7 +226,7 @@ io.sockets.on('connection',
             //            if(DEBUG && DEBUG==1)
             //              console.log('Dist.: ' + dist);
 
-            if (dist < 20.0) {
+            if (dist < 40.0) {
               if (DEBUG && DEBUG == 1) {
                 console.log('HIT ------------------------');
                 console.log('shotid: ' + shots[i].shotid);

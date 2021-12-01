@@ -1,49 +1,55 @@
 
 var tankWidth = 20;
 var tankHeight = 30;
-
-// A Tank Class
-function Tank(startPos, tankColor, newtankid, playerName) {
-  this.pos = startPos.copy();
-  this.r = 20;
-  this.heading = 0;
-  this.rotation = 0;
-  this.vel = createVector(0, 0);
-  this.isBoosting = false;
-  this.destroyed = false;
-  this.tankColor = tankColor;
-  this.tankid = newtankid;
-  this.playerName = playerName;
-  this.health = 100;
-  this.damage = 0;
-  this.currentweapon = new machinegun;
-  this.assignWeapon = (weapon) => {
-    this.currentweapon = weapon;
-  }
-
-  //Shoot function
-  this.shoot = function (shot) {
-    let damage = this.currentweapon.damage;
-    let delay = this.currentweapon.delay;
-    let count = delay;
+class Tank {
+  constructor(startPos, tankColor, newtankid, playerName) {
+    this.shots = [];
+    this.pos = startPos.copy();
+    this.r = 20;
+    this.heading = 0;
+    this.rotation = 0;
+    this.vel = createVector(0, 0);
+    this.isBoosting = false;
+    this.destroyed = false;
+    this.tankColor = tankColor;
+    this.tankid = newtankid;
+    this.playerName = playerName;
+    this.health = 100;
+    this.damage = 0;
+    this.currentweapon = new machinegun;
+    this.assignWeapon = (weapon) => {
+      this.currentweapon = weapon;
+    }
+    this.delay = this.currentweapon.delay;
+    this.count = this.delay;
+    this.damage = this.currentweapon.damage;
     setInterval(() => {
-      count--;
+      this.count--;
     }, 100);
-    
+  }
+  //Shoot function 
+
+  shoot(t, index) {
+    if (this.count <= 0) {
+      this.count = this.delay;
+      //process shot
+      t[index].playerName += '+';
+      return t;
+    }
   }
 
   // For an optional boost feature
-  this.boosting = function (b) {
+  boosting(b) {
     this.isBoosting = b;
   }
 
-  this.boost = function () {
+  boost() {
     var force = p5.Vector.fromAngle(this.heading);
     this.vel.add(force);
   }
 
   // Render - to render the tank to the screen
-  this.render = function () {
+  render() {
 
     push();
 
@@ -87,28 +93,28 @@ function Tank(startPos, tankColor, newtankid, playerName) {
   }
 
   // Moving tank
-  this.moveForward = function (a) {
+  moveForward(a) {
     var force = p5.Vector.fromAngle(this.heading);
     force.mult(a);
     this.vel.add(force);
   }
 
-  this.stopMotion = function () {
+  stopMotion() {
     this.vel.x = 0;
     this.vel.y = 0;
     this.vel.z = 0;
   }
 
-  this.setRotation = function (a) {
+  setRotation(a) {
     this.rotation = a;
   }
 
-  this.turn = function () {
+  turn() {
     this.heading += this.rotation;
   }
 
   // Update its forward and backward motion
-  this.update = function () {
+  update() {
     if (this.isBoosting) {
       this.boost();
     }

@@ -1,8 +1,9 @@
 var win;
 //var tank; // Just this instance of the tank
-let tanks = []; // All tanks in the game 
+let tanks = []; // All tanks in the game
 let shots = []; // All shots in the game
-let weapons = [];
+let weapons = []; //All weapons in the game
+var weaponIndex = 0;
 var socketID;
 var mytankid;
 var myTankIndex = -1;
@@ -12,23 +13,31 @@ var socket;
 var oldTankx, oldTanky, oldTankHeading;
 var fps = 60; // Frames per second
 var PlayerName = "";
-var DEBUG = 1;
+var DEBUG = 0;
 var loopCount = 0.0;  // Keep a running counter to handle animations
-var testMachinegun;
-var delayTime = 1;
-var delay = delayTime;
+let loop;
 
+//FNs
+const compareTanks = (t, tprev) => {
+  if (t.tankid < tprev.tankid) return -1;
+  if (t.tankid > tprev.tankid) return 1;
+  return 0;
+}
+const sortTanks = (tankarr) => {
+  let ids = [];
+  tankarr.map(t => ids.push(t.tankid));
+  ids = ids.sort();
+  return tankarr.sort(compareTanks)
+}
 
 // Sounds activated
 const soundLib = new sounds();
 
+
 // Initial Setup
 function setup() {
-  testMachinegun = new machinegun();
-  function ChangeDelay() {
-    delay--;
-  };
-  setInterval(ChangeDelay, 1000);
+
+
 
   // Start the audio context on a click/touch event
   userStartAudio().then(function () {
@@ -41,7 +50,6 @@ function setup() {
 
   // Get the Player
   PlayerName = document.getElementById('playerName').value;
-  console.log('Player: ' + PlayerName);
 
   // Set drawing parmameters
   rectMode(CENTER);
@@ -76,6 +84,7 @@ function setup() {
   // Join (or start) a new game //OnConnect
   socket.on('connect', function (data) {
     socketID = socket.io.engine.id;
+    console.log('Player: ' + PlayerName + ', ID: ' + socketID);
     socket.emit('ClientNewJoin', socketID);
   });
 
@@ -85,8 +94,17 @@ function setup() {
 
 // Draw the screen and process the position updates
 function draw() {
-  background(0);
-  testMachinegun.show();
+  background(155, 155, 155);
+  switchWeapon();
+  checkIfTankWeaponCollide();
+  for (i = 0; i < weapons.length; i++) {
+    weapons[i].show();
+  }
+
+
+
+
+
   // Loop counter
   if (loopCount > 359 * 10000)
     loopCount = 0;
@@ -117,14 +135,14 @@ function draw() {
         tanks[t].update();
 
         // Check for off screen and don't let it go any further
-        if (tanks[t].pos.x < 0)
-          tanks[t].pos.x = 0;
-        if (tanks[t].pos.x > win.width)
-          tanks[t].pos.x = win.width;
-        if (tanks[t].pos.y < 0)
-          tanks[t].pos.y = 0;
-        if (tanks[t].pos.y > win.height)
-          tanks[t].pos.y = win.height;
+        if (tanks[t].pos.x - tanks[t].r / 2 < 0)
+          tanks[t].pos.x = tanks[t].r / 2;
+        if (tanks[t].pos.x + tanks[t].r / 2 > win.width)
+          tanks[t].pos.x = win.width - tanks[t].r / 2;
+        if (tanks[t].pos.y - tanks[t].r / 2 < 0)
+          tanks[t].pos.y = tanks[t].r / 2;
+        if (tanks[t].pos.y + tanks[t].r / 2 > win.height)
+          tanks[t].pos.y = win.height - tanks[t].r / 2;
 
       }
       else {  // Only render if within 150 pixels
@@ -167,23 +185,24 @@ function keyPressed() {
   if (tanks[myTankIndex].destroyed)
     return;
 
-  if (key == ' ') {
-    if (delay <= 0) delay = delayTime
-    else return;                       // Fire Shell
-    const shotid = new Date().getTime();
-    // const shotid = random(0, 50000);
-    shots.push(new Shot(shotid, tanks[myTankIndex].tankid, tanks[myTankIndex].pos,
-      tanks[myTankIndex].heading, tanks[myTankIndex].tankColor));
-    let newShot = {
-      x: tanks[myTankIndex].pos.x, y: tanks[myTankIndex].pos.y, heading: tanks[myTankIndex].heading,
-      tankColor: tanks[myTankIndex].tankColor, shotid: shotid, tankid: tanks[myTankIndex].tankid
-    };
-    socket.emit('ClientNewShot', newShot);
-    // Play a shot sound
-    // soundLib.playSound('tankfire');
-    soundLib.playSound('dpop');
+  if (key == ' ') {             // Fire Shell
+    loop = setInterval(() => {
+      const shotid = new Date().getTime();
+      // const shotid = random(0, 50000);
+      console.log(tanks[myTankIndex].tankid);
+      shots.push(new Shot(shotid, mytankid, tanks[myTankIndex].pos,
+        tanks[myTankIndex].heading, tanks[myTankIndex].tankColor));
+      let newShot = {
+        x: tanks[myTankIndex].pos.x, y: tanks[myTankIndex].pos.y, heading: tanks[myTankIndex].heading,
+        tankColor: tanks[myTankIndex].tankColor, shotid: shotid, tankid: mytankid
+      };
+      socket.emit('ClientNewShot', newShot);
+      // Play a shot sound
+      // soundLib.playSound('tankfire');
+      soundLib.playSound('dpop');
 
-    return;
+      return;
+    }, tanks[myTankIndex].delay * 100);
   } else if (keyCode == RIGHT_ARROW) {  // Move Right
     tanks[myTankIndex].setRotation(0.1);
   } else if (keyCode == LEFT_ARROW) {   // Move Left
@@ -201,7 +220,9 @@ function keyPressed() {
 function keyReleased() {
   if (!tanks || myTankIndex < 0)
     return;
-
+  if (key == ' ') {
+    clearInterval(loop)
+  }
   if (keyCode == RIGHT_ARROW || keyCode == LEFT_ARROW)
     tanks[myTankIndex].setRotation(0.0);
   if (keyCode == UP_ARROW || keyCode == DOWN_ARROW)
@@ -225,12 +246,15 @@ function ServerReadyAddNew(data) {
   let startColor = color(Math.floor(Math.random() * 255), Math.floor(Math.random() * 255), Math.floor(Math.random() * 255));
   let newTank = { x: startPos.x, y: startPos.y, heading: 0, tankColor: startColor, tankid: socketID, playername: PlayerName };
 
-
-  // Create the new tank and add it to the array
   mytankid = socketID;
-  myTankIndex = tanks.length;
+
   var newTankObj = new Tank(startPos, startColor, mytankid, PlayerName)
   tanks.push(newTankObj);
+  tanks = sortTanks(tanks.filter(t => !t.destroyed));
+
+  // Create the new tank and add it to the array
+  myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
+  // myTankIndex = tanks.length;
 
   // Send this new tank to the server to add to the list
   socket.emit('ClientNewTank', newTank);
@@ -239,7 +263,7 @@ function ServerReadyAddNew(data) {
 // Server got new tank -- add it to the list
 function ServerNewTankAdd(data) {
   if (DEBUG && DEBUG == 1)
-    console.log('New Tank: ' + data);
+    console.log(data);
 
   // Add any tanks not yet in our tank array
   var tankFound = false;
@@ -258,13 +282,14 @@ function ServerNewTankAdd(data) {
         // Add this tank to the end of the array
         let startPos = createVector(Number(data[d].x), Number(data[d].y));
         let c = color(data[d].tankColor.levels[0], data[d].tankColor.levels[1], data[d].tankColor.levels[2]);
-        
+
         ////////////////NEW TANK///////////////
-        
+
         let newTankObj = new Tank(startPos, c, data[d].tankid, data[d].playername);
-        let defaultGun = new sniper();
+        let defaultGun = new rpg();
         newTankObj.assignWeapon(defaultGun);
         tanks.push(newTankObj);
+        tanks = sortTanks(tanks.filter(t => !t.destroyed));
       }
       tankFound = false;
     }
@@ -305,7 +330,9 @@ function ServerMoveTank(data) {
 }
 
 function ServerNewShot(data) {
-  console.log('shot')
+  tanks = sortTanks(tanks.filter(t => !t.destroyed));
+  myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
+  console.log(myTankIndex)
   // First check if this shot is already in our list
   if (shots !== undefined) {
     for (var i = 0; i < shots.length; i++) {
@@ -316,9 +343,13 @@ function ServerNewShot(data) {
   }
   // Add this shot to the end of the array
   let c = color(data.tankColor.levels[0], data.tankColor.levels[1], data.tankColor.levels[2]);
-
+  // if (data.tankid !== socketID) return;
+  console.log(data.tankid);
   shots.push(new Shot(data.shotid, data.tankid, createVector(data.x, data.y), data.heading, c));
-  tanks[data.tankid].shoot();
+  // console.log(tanks[myTankIndex])
+  console.log(tanks[myTankIndex].playerName);
+  let shotresult = tanks[myTankIndex].shoot(tanks, myTankIndex);
+  if (shotresult) tanks = shotresult;
 }
 
 function ServerMoveShot(data) {
@@ -364,4 +395,40 @@ function ServerBuzzSawMove(data) {
     buzz.velocity.x = data.xvel;
     buzz.velocity.y = data.yvel;
   }
+}
+//switches weapons ,there can never be more than 3 weapons onscreen at a time 
+function switchWeapon() {
+  if (weapons.length < 3) {
+    let r = round(random(0, 3))
+    let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
+    let rpgTemp = new rpg(random(0, 600), random(0, 600));
+    let sniperTemp = new sniper(random(0, 600), random(0, 600));
+    if (r == 1) {
+      weapons.push(machinegunTemp);
+    }
+    else if (r == 2) {
+      weapons.push(rpgTemp);
+    }
+    else if (r == 3) {
+      weapons.push(sniperTemp);
+    }
+  }
+}
+function checkIfTankWeaponCollide() {
+  let weaponsToDelete = [];
+  if (!weapons.length) return;
+  // console.log(weapons)
+  weapons.map(w => {
+    tanks.map(t => {
+      if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
+        t.currentweapon = w;
+        weaponsToDelete.push(w);
+        //tanks = sortTanks(tanks);
+        //tanks.findIndex(t=>t.tankid==socketID)
+        print(tanks[myTankIndex].currentweapon);
+
+      }
+    })
+  });
+  weapons = weapons.filter(weapon => !weaponsToDelete.includes(weapon));
 }

@@ -1,18 +1,19 @@
 // Shot class - represents shots by the tank
-function Shot(shotid, tankid, spos, angle, color) {
-  this.pos = createVector(spos.x, spos.y);
-  this.vel = p5.Vector.fromAngle(angle);
-  this.vel.mult(3);
-  this.color = color;
-  this.shotid = shotid;
-  this.tankid = tankid;
-
-  this.update = function () {
+class Shot {
+  constructor(shotid, tankid, spos, angle, color) {
+    this.pos = createVector(spos.x, spos.y);
+    this.vel = p5.Vector.fromAngle(angle);
+    this.vel.mult(3);
+    this.color = color;
+    this.shotid = shotid;
+    this.tankid = tankid;
+  }
+  update() {
     this.pos.add(this.vel);
   }
 
   // Render the shot to the screen
-  this.render = function () {
+  render() {
     push();
 
     // Original shots
@@ -30,9 +31,9 @@ function Shot(shotid, tankid, spos, angle, color) {
   }
 
   // Check if the tank hits another tank
-  this.hits = function (enemyTank) {
+  hits(enemyTank) {
     var d = dist(this.pos.x, this.pos.y, enemyTank.pos.x, enemyTank.pos.y);
-    if (d < enemyTank.r) {
+    if (d < 30) {
       return true;
     } else {
       return false;
@@ -40,7 +41,7 @@ function Shot(shotid, tankid, spos, angle, color) {
   }
 
   // Check if the shot moves off screen.  In which case, kill it
-  this.offscreen = function () {
+  offscreen() {
     if (this.pos.x > width || this.pos.x < 0) {
       socket.emit('ClientRemoveShot', this.shotid);
       return true;
@@ -51,6 +52,4 @@ function Shot(shotid, tankid, spos, angle, color) {
     }
     return false;
   }
-
-
 }
