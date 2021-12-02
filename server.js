@@ -9,7 +9,7 @@ const request = require('request');
 var tanks = [];
 var shots = [];
 var buzzSawTarget = -1;
-var DEBUG = 0;
+var DEBUG = 1;
 
 // Set up the server
 // process.env.PORT is related to deploying on AWS
@@ -98,8 +98,10 @@ io.sockets.on('connection',
         let newTank = {
           x: Number(data.x), y: Number(data.y),
           heading: Number(data.heading), tankColor: data.tankColor,
-          tankid: data.tankid, playername: data.playername
+          tankid: data.tankid, playername: data.playername,
+          damageTaken: 0
         };
+        // let newTank = new Tank([data.x, data.y], data.tankColor, data.tankid, data.playerName)
 
         // Add this tank to the end of the array if not in array
         if (!tankFound)
@@ -190,7 +192,6 @@ io.sockets.on('connection',
     // Connected client moving Shots
     socket.on('ClientMoveShot',
       function (data) {
-
         // Data comes in as whatever was sent, including objects
         if (DEBUG && DEBUG == 1)
           console.log('Move Shot: ' + JSON.stringify(data));
@@ -213,19 +214,9 @@ io.sockets.on('connection',
         // Look for hits with all tanks
         for (var t = tanks.length - 1; t >= 0; t--) {
           // As long as it's not the tank that fired the shot
-          if (shots[i].tankid == tanks[t].tankid)
-            continue;
+          if (shots[i].tankid == tanks[t].tankid) continue
           else {
-
-            var dist = Math.sqrt(Math.pow((shots[i].x - tanks[t].x), 2) + Math.pow((shots[i].y - tanks[t].y), 2));
-
-            //            var dist = dist(shots[i].x, shots[i].y, tanks[t].x, tanks[t].y);
-
-            //            console.log('Dist: ' + dist);
-
-            //            if(DEBUG && DEBUG==1)
-            //              console.log('Dist.: ' + dist);
-
+            let dist = Math.hypot((shots[i].x - tanks[t].x), (shots[i].y - tanks[t].y));
             if (dist < 40.0) {
               if (DEBUG && DEBUG == 1) {
                 console.log('HIT ------------------------');
@@ -239,9 +230,23 @@ io.sockets.on('connection',
               }
               // It was a hit, remove the tank and shot
               // and tell everyone else its gone too
-              io.sockets.emit('ServerTankRemove', tanks[t].tankid);
-              tanks.splice(t, 1);
+              if (tanks[t].damageTaken >= 30) {
+                io.sockets.emit('ServerTankRemove', tanks[t].tankid);
+                tanks.splice(t, 1);
+              }
+              if (shots[i])
+                if (!shots[i].used) {
+                  if (!tanks[t]) return;
+                  tanks[t].damageTaken += shots[i].damage;
+                  console.log('Tank: ', tanks[t].damageTaken);
+                  io.sockets.emit('ServerDamageTaken', {
+                    damageTaken: tanks[t].damageTaken,
+                    tankid: tanks[t].tankid
+                  });
+                  shots[i].used = true;
+                }
               shots.splice(i, 1);
+              // console.log('Shot: ', shots[i].damage);
               // just return for now to keep from unknown errors
               return;
             }

@@ -1,8 +1,10 @@
 var win;
 //var tank; // Just this instance of the tank
 let tanks = []; // All tanks in the game
+let deadTanks = [];
 let shots = []; // All shots in the game
 let weapons = []; //All weapons in the game
+let powerups = [];//All powerups in the game
 var weaponIndex = 0;
 var socketID;
 var mytankid;
@@ -13,7 +15,7 @@ var socket;
 var oldTankx, oldTanky, oldTankHeading;
 var fps = 60; // Frames per second
 var PlayerName = "";
-var DEBUG = 0;
+var DEBUG = 1;
 var loopCount = 0.0;  // Keep a running counter to handle animations
 let loop;
 
@@ -37,7 +39,10 @@ const soundLib = new sounds();
 // Initial Setup
 function setup() {
 
-
+  setInterval(() => {
+    switchWeapon();
+    switchPowerUp();
+  }, 10000);
 
   // Start the audio context on a click/touch event
   userStartAudio().then(function () {
@@ -80,13 +85,29 @@ function setup() {
   socket.on('ServerNewShot', ServerNewShot);
   socket.on('ServerBuzzSawNewChaser', ServerBuzzSawNewChaser);
   socket.on('ServerBuzzSawMove', ServerBuzzSawMove);
+  socket.on('ServerDamageTaken', ServerDamageTaken);
 
   // Join (or start) a new game //OnConnect
-  socket.on('connect', function (data) {
+  socket.on('connect', data => {
     socketID = socket.io.engine.id;
     console.log('Player: ' + PlayerName + ', ID: ' + socketID);
     socket.emit('ClientNewJoin', socketID);
   });
+  socket.on('disconnect', reason => {
+    //remove tank and don't add it into destroyedTanks
+    if (reason == 'ping timeout' || reason == 'transport close') {
+      let id = socket.io.engine.id;
+      deadTanks.map((deadTank, index) => {
+        if (deadTank.tankid == id) {
+          // deadTanks.splice(index, 1);
+          // deadTank.show = false;
+        };
+      })
+      tanks.map((tank, index) => {
+        if (tank.id == id) tanks.splice(index, 1);
+      });
+    }
+  })
 
   // Create a new Buzz
   //  buzz = new Buzzsaw(win.width/2, win.height/2, color('#ffdc49'));
@@ -95,16 +116,18 @@ function setup() {
 // Draw the screen and process the position updates
 function draw() {
   background(155, 155, 155);
-  switchWeapon();
+  //check if the tank collides with a weapon if so assign that weapon t0 the tank
   checkIfTankWeaponCollide();
+  //check if the tank collides with a powerup if so assign to tank
+  checkIfTankPowerUpCollide();
+  //weapon show
   for (i = 0; i < weapons.length; i++) {
     weapons[i].show();
   }
-
-
-
-
-
+  //powerup show
+  for (i = 0; i < powerups.length; i++) {
+    powerups[i].show();
+  }
   // Loop counter
   if (loopCount > 359 * 10000)
     loopCount = 0;
@@ -113,19 +136,30 @@ function draw() {
 
   // Process shots
   for (var i = shots.length - 1; i >= 0; i--) {
-    shots[i].render();
-    shots[i].update();
-    if (shots[i].offscreen()) {
-      shots.splice(i, 1);
-    }
-    else {
-      let shotData = {
-        x: shots[i].pos.x, y: shots[i].pos.y,
-        shotid: shots[i].shotid
-      };
-      socket.emit('ClientMoveShot', shotData);
+    if (myTankIndex < 0) myTankIndex = sortTanks(tanks).findIndex(t => t.tankid == socketID);
+    if (myTankIndex >= 0) {
+      if (shots[i] == undefined || tanks.find(t => t.tankid == shots[i].tankid) == undefined) return;
+      shots[i].render(tanks.find(t => t.tankid == shots[i].tankid).bulletRadius);
+      shots[i].update();
+      if (shots[i].offscreen()) {
+        shots.splice(i, 1);
+      }
+      else {
+        let shotData = {
+          x: shots[i].pos.x, y: shots[i].pos.y,
+          shotid: shots[i].shotid,
+          damageTaken: tanks[myTankIndex] ? tanks[myTankIndex].damageTaken : 30,
+          used: false
+        };
+
+        socket.emit('ClientMoveShot', shotData);
+      }
     }
   }
+  //Process dead tanks
+  deadTanks.map(dt => {
+    dt.render();
+  })
   // Process all the tanks by iterating through the tanks array
   if (tanks && tanks.length > 0) {
     for (var t = 0; t < tanks.length; t++) {
@@ -161,40 +195,53 @@ function draw() {
   }
 
   // To keep this program from being too chatty => Only send server info if something has changed
-  if (tanks && tanks.length > 0 && myTankIndex > -1
-    && (oldTankx != tanks[myTankIndex].pos.x || oldTanky != tanks[myTankIndex].pos.y || oldTankHeading != tanks[myTankIndex].heading)) {
-    let newTank = {
-      x: tanks[myTankIndex].pos.x, y: tanks[myTankIndex].pos.y,
-      heading: tanks[myTankIndex].heading, tankColor: tanks[myTankIndex].tankColor,
-      tankid: tanks[myTankIndex].tankid
+
+  if (myTankIndex >= 0 && tanks[myTankIndex]) {
+    if (tanks.findIndex(t => t.tankid == socketID) < 0) {
+      alert('you died!');
+      location.reload();
     };
-    socket.emit('ClientMoveTank', newTank);
-    oldTankx = tanks[myTankIndex].pos.x;
-    oldTanky = tanks[myTankIndex].pos.y;
-    oldTankHeading = tanks[myTankIndex].heading;
+    myTankIndex = sortTanks(tanks).findIndex(t => t.tankid == mytankid);
+    if (oldTankx != tanks[myTankIndex].pos.x || oldTanky != tanks[myTankIndex].pos.y || oldTankHeading != tanks[myTankIndex].heading) {
+      let newTank = {
+        x: tanks[myTankIndex].pos.x, y: tanks[myTankIndex].pos.y,
+        heading: tanks[myTankIndex].heading, tankColor: tanks[myTankIndex].tankColor,
+        tankid: tanks[myTankIndex].tankid, damageTaken: 0,
+        bulletRadius: 10
+      };
+      // redefined newTank to Tank object as is better practice
+      // let myTank = tanks[myTankIndex];
+      // let newTank = new Tank(createVector(myTank.pos), myTank.tankColor, myTank.tankid, myTank.PlayerName);
+      // newTank.heading = myTank.heading;
+      socket.emit('ClientMoveTank', newTank);
+      oldTankx = tanks[myTankIndex].pos.x;
+      oldTanky = tanks[myTankIndex].pos.y;
+      oldTankHeading = tanks[myTankIndex].heading;
+    }
   }
 }
 
 
 // Handling pressing a Key
 function keyPressed() {
-  if (!tanks || myTankIndex < 0)
+  if (!tanks[myTankIndex])
     return;
-
   // Can not be a destroyed tank!
   if (tanks[myTankIndex].destroyed)
     return;
 
   if (key == ' ') {             // Fire Shell
+    clearInterval(loop);
     loop = setInterval(() => {
       const shotid = new Date().getTime();
       // const shotid = random(0, 50000);
-      console.log(tanks[myTankIndex].tankid);
+      if (!tanks[myTankIndex]) return;
       shots.push(new Shot(shotid, mytankid, tanks[myTankIndex].pos,
-        tanks[myTankIndex].heading, tanks[myTankIndex].tankColor));
+        tanks[myTankIndex].heading, tanks[myTankIndex].tankColor, tanks[myTankIndex].damage));
       let newShot = {
         x: tanks[myTankIndex].pos.x, y: tanks[myTankIndex].pos.y, heading: tanks[myTankIndex].heading,
-        tankColor: tanks[myTankIndex].tankColor, shotid: shotid, tankid: mytankid
+        tankColor: tanks[myTankIndex].tankColor, shotid: shotid, tankid: mytankid, damage: tanks[myTankIndex].damage,
+        used: false
       };
       socket.emit('ClientNewShot', newShot);
       // Play a shot sound
@@ -202,7 +249,7 @@ function keyPressed() {
       soundLib.playSound('dpop');
 
       return;
-    }, tanks[myTankIndex].delay * 100);
+    }, tanks[myTankIndex].currentweapon.delay * 100);
   } else if (keyCode == RIGHT_ARROW) {  // Move Right
     tanks[myTankIndex].setRotation(0.1);
   } else if (keyCode == LEFT_ARROW) {   // Move Left
@@ -218,8 +265,8 @@ function keyPressed() {
 
 // Release Key
 function keyReleased() {
-  if (!tanks || myTankIndex < 0)
-    return;
+  if (!tanks[myTankIndex]) return;
+  if (tanks[myTankIndex].destroyed) return;
   if (key == ' ') {
     clearInterval(loop)
   }
@@ -244,13 +291,13 @@ function ServerReadyAddNew(data) {
   // Make sure it's starting position is at least 20 pixels from the border of all walls
   let startPos = createVector(Math.floor(Math.random() * (win.width - 40) + 20), Math.floor(Math.random() * (win.height - 40) + 20));
   let startColor = color(Math.floor(Math.random() * 255), Math.floor(Math.random() * 255), Math.floor(Math.random() * 255));
-  let newTank = { x: startPos.x, y: startPos.y, heading: 0, tankColor: startColor, tankid: socketID, playername: PlayerName };
+  let newTank = { x: startPos.x, y: startPos.y, heading: 0, tankColor: startColor, tankid: socketID, playername: PlayerName, damageTaken: 0, bulletRadius: 10 };
 
   mytankid = socketID;
 
   var newTankObj = new Tank(startPos, startColor, mytankid, PlayerName)
   tanks.push(newTankObj);
-  tanks = sortTanks(tanks.filter(t => !t.destroyed));
+  tanks = sortTanks(tanks);
 
   // Create the new tank and add it to the array
   myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
@@ -262,6 +309,8 @@ function ServerReadyAddNew(data) {
 
 // Server got new tank -- add it to the list
 function ServerNewTankAdd(data) {
+  // tanks = sortTanks(tanks.filter(t => !t.destroyed));
+  myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
   if (DEBUG && DEBUG == 1)
     console.log(data);
 
@@ -290,6 +339,7 @@ function ServerNewTankAdd(data) {
         newTankObj.assignWeapon(defaultGun);
         tanks.push(newTankObj);
         tanks = sortTanks(tanks.filter(t => !t.destroyed));
+        myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
       }
       tankFound = false;
     }
@@ -306,6 +356,9 @@ function ServerTankRemove(socketid) {
   for (var i = tanks.length - 1; i >= 0; i--) {
     if (tanks[i].tankid == socketid) {
       tanks[i].destroyed = true;
+      deadTanks.push(tanks[i]);
+      tanks = sortTanks(tanks.filter(t => !t.destroyed));
+      myTankIndex = tanks.findIndex(t => t.tankid == mytankid);
       return;
     }
   }
@@ -332,7 +385,7 @@ function ServerMoveTank(data) {
 function ServerNewShot(data) {
   tanks = sortTanks(tanks.filter(t => !t.destroyed));
   myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
-  console.log(myTankIndex)
+  // let currentweapon = tanks[myTankIndex].currentweapon;
   // First check if this shot is already in our list
   if (shots !== undefined) {
     for (var i = 0; i < shots.length; i++) {
@@ -344,12 +397,8 @@ function ServerNewShot(data) {
   // Add this shot to the end of the array
   let c = color(data.tankColor.levels[0], data.tankColor.levels[1], data.tankColor.levels[2]);
   // if (data.tankid !== socketID) return;
-  console.log(data.tankid);
-  shots.push(new Shot(data.shotid, data.tankid, createVector(data.x, data.y), data.heading, c));
+  shots.push(new Shot(data.shotid, data.tankid, createVector(data.x, data.y), data.heading, c, tanks[myTankIndex] ? tanks[myTankIndex].damage : 5));
   // console.log(tanks[myTankIndex])
-  console.log(tanks[myTankIndex].playerName);
-  let shotresult = tanks[myTankIndex].shoot(tanks, myTankIndex);
-  if (shotresult) tanks = shotresult;
 }
 
 function ServerMoveShot(data) {
@@ -364,6 +413,18 @@ function ServerMoveShot(data) {
         break;
       }
     }
+}
+
+//Taken Damage
+function ServerDamageTaken(data) {
+  let id = data.tankid;
+  let damage = data.damageTaken;
+  let tank = sortTanks(tanks).find(t=>t.tankid==id);
+  if (!tank) return;
+  let index = sortTanks(tanks).findIndex(t=>t.tankid==id);
+  tank.damageTaken = damage;
+  tanks[index] = tank;
+  console.log('E')
 }
 
 // Handle a restart command
@@ -414,21 +475,59 @@ function switchWeapon() {
     }
   }
 }
+//switches the medkit and shield can never be more than 2 onscreen at a time 
+function switchPowerUp() {
+  if (powerups.length < 2) {
+    let r = round(random(0, 2))
+    let shieldTemp = new shield(random(0, 600), random(0, 600));
+    let medkitTemp = new medkit(random(0, 600), random(0, 600));
+    if (r == 1) {
+      powerups.push(shieldTemp);
+    }
+    else if (r == 2) {
+      powerups.push(medkitTemp);
+    }
+
+  }
+}
 function checkIfTankWeaponCollide() {
   let weaponsToDelete = [];
   if (!weapons.length) return;
   // console.log(weapons)
   weapons.map(w => {
     tanks.map(t => {
+      // let iterate = true;
+      if (t.destroyed || tanks.findIndex(t => t.tankid == socketID) < 0) iterate = false;
       if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
-        t.currentweapon = w;
+        t.assignWeapon(w)
         weaponsToDelete.push(w);
+        clearInterval(loop);
+        key = ' ';
+        keyPressed();
         //tanks = sortTanks(tanks);
         //tanks.findIndex(t=>t.tankid==socketID)
-        print(tanks[myTankIndex].currentweapon);
+        // if (iterate) console.log(tanks[myTankIndex].currentweapon);
 
       }
     })
   });
   weapons = weapons.filter(weapon => !weaponsToDelete.includes(weapon));
+}
+
+function checkIfTankPowerUpCollide() {
+  let weaponsToDelete = [];
+  if (!powerups.length) return;
+  // console.log(weapons)
+  powerups.map(w => {
+    tanks.map(t => {
+      console.log(t)
+      if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
+        t.assignPowerup(w)
+        weaponsToDelete.push(w);
+        clearInterval(loop);
+
+      }
+    })
+  });
+  powerups = powerups.filter(powerups => !weaponsToDelete.includes(powerups));
 }

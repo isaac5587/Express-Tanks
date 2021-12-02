@@ -1,19 +1,21 @@
 // Shot class - represents shots by the tank
 class Shot {
-  constructor(shotid, tankid, spos, angle, color) {
+  constructor(shotid, tankid, spos, angle, color, damage) {
     this.pos = createVector(spos.x, spos.y);
     this.vel = p5.Vector.fromAngle(angle);
     this.vel.mult(3);
     this.color = color;
     this.shotid = shotid;
     this.tankid = tankid;
+    this.damage = damage;
+    this.used = false;
   }
   update() {
     this.pos.add(this.vel);
   }
 
   // Render the shot to the screen
-  render() {
+  render(r) {
     push();
 
     // Original shots
@@ -25,7 +27,7 @@ class Shot {
     stroke(255);
     fill(this.color);
     strokeWeight(1);
-    ellipse(this.pos.x - 2, this.pos.y - 2, 9, 9);
+    ellipse(this.pos.x - 2, this.pos.y - 2, r, r);
     point(this.pos.x, this.pos.y);
     pop();
   }
@@ -33,7 +35,7 @@ class Shot {
   // Check if the tank hits another tank
   hits(enemyTank) {
     var d = dist(this.pos.x, this.pos.y, enemyTank.pos.x, enemyTank.pos.y);
-    if (d < 30) {
+    if (d < 60) {
       return true;
     } else {
       return false;
