@@ -5,7 +5,6 @@ let deadTanks = [];
 let shots = []; // All shots in the game
 let weapons = []; //All weapons in the game
 let powerups = [];//All powerups in the game
-let dataWeapons = [{x:300,y:300,r:2}];
 var weaponIndex = 0;
 var socketID;
 var mytankid;
@@ -39,8 +38,11 @@ const soundLib = new sounds();
 
 // Initial Setup
 function setup() {
+  setInterval(() => {
+    switchWeapon();
+    switchPowerUp();
+  }, 1000);
 
- 
 
   // Start the audio context on a click/touch event
   userStartAudio().then(function () {
@@ -84,6 +86,7 @@ function setup() {
   socket.on('ServerBuzzSawNewChaser', ServerBuzzSawNewChaser);
   socket.on('ServerBuzzSawMove', ServerBuzzSawMove);
   socket.on('ServerDamageTaken', ServerDamageTaken);
+  socket.on('ServerSyncTanks', ServerSyncTanks);
 
   // Join (or start) a new game //OnConnect
   socket.on('connect', data => {
@@ -119,9 +122,6 @@ function draw() {
   //check if the tank collides with a powerup if so assign to tank
   checkIfTankPowerUpCollide();
   //weapon show
-  for (i = 0; i < dataWeapons.length; i++) {
-   updateWeapons();
-  }
   for (i = 0; i < weapons.length; i++) {
     weapons[i].show();
   }
@@ -140,7 +140,7 @@ function draw() {
     if (myTankIndex < 0) myTankIndex = sortTanks(tanks).findIndex(t => t.tankid == socketID);
     if (myTankIndex >= 0) {
       if (shots[i] == undefined || tanks.find(t => t.tankid == shots[i].tankid) == undefined) return;
-      shots[i].render(tanks.find(t => t.tankid == shots[i].tankid).bulletRadius);
+      shots[i].render(tanks.find(t => t.tankid == shots[i].tankid).currentweapon.bulletRadius);
       shots[i].update();
       if (shots[i].offscreen()) {
         shots.splice(i, 1);
@@ -166,6 +166,20 @@ function draw() {
     for (var t = 0; t < tanks.length; t++) {
       if (tanks[t].tankid == mytankid) {
         tanks[t].render();
+        //Shield and Health Rendering
+        push();
+        translate(tanks[t].pos.x, tanks[t].pos.y);
+        strokeWeight(4);
+        strokeCap(ROUND);
+        stroke(255, 0, 0);//red (Background)
+        line(-13, 20, 17, 20);
+        stroke(0, 255, 0);//green (Health)
+        if (tanks[t].damageTaken >= 30) stroke(255, 0, 0);
+        line(-13, 20, 17 - tanks[t].damageTaken, 20);
+        stroke(0, 157, 255);//blue (Shield)
+        if (tanks[t].shield > 0) line(-13, 20, -13 + tanks[t].shield, 20);
+        pop();
+        //
         tanks[t].turn();
         tanks[t].update();
 
@@ -292,11 +306,18 @@ function ServerReadyAddNew(data) {
   // Make sure it's starting position is at least 20 pixels from the border of all walls
   let startPos = createVector(Math.floor(Math.random() * (win.width - 40) + 20), Math.floor(Math.random() * (win.height - 40) + 20));
   let startColor = color(Math.floor(Math.random() * 255), Math.floor(Math.random() * 255), Math.floor(Math.random() * 255));
-  let newTank = { x: startPos.x, y: startPos.y, heading: 0, tankColor: startColor, tankid: socketID, playername: PlayerName, damageTaken: 0, bulletRadius: 10 };
+  let newTank = {
+    x: startPos.x, y: startPos.y, heading: 0, tankColor: startColor, tankid: socketID, playername: PlayerName, damageTaken: 0, bulletRadius: 10,
+    shield: 30, currentweapon: {
+
+    }
+  };
 
   mytankid = socketID;
 
   var newTankObj = new Tank(startPos, startColor, mytankid, PlayerName)
+  newTankObj.currentweapon.bulletRadius = new machinegun().bulletRadius;
+  newTankObj.currentweapon.delay = new machinegun().delay;
   tanks.push(newTankObj);
   tanks = sortTanks(tanks);
 
@@ -311,10 +332,18 @@ function ServerReadyAddNew(data) {
 // Server got new tank -- add it to the list
 function ServerNewTankAdd(data) {
   // tanks = sortTanks(tanks.filter(t => !t.destroyed));
-  myTankIndex = tanks.findIndex(tank => tank.tankid === mytankid);
+  myTankIndex = tanks.findIndex(t => t.tankid === mytankid);
+  if (myTankIndex < 0) return;
   if (DEBUG && DEBUG == 1)
     console.log(data);
+  // let tankColor = color(tank.tankColor.levels[0], tank.tankColor.levels[1], tank.tankColor.levels[2])
+  // let TankObj = new Tank(createVector(tank.x, tank.y), tankColor, tank.tankid, tank.PlayerName);
+  // TankObj.assignWeapon(new machinegun());
+  // tanks.push(TankObj);
+  // tanks = sortTanks(tanks);
+  // myTankIndex = tanks.findIndex(t => t.tankid == mytankid);
 
+  ////////////////////////////////////
   // Add any tanks not yet in our tank array
   var tankFound = false;
   if (tanks !== undefined) {
@@ -336,7 +365,9 @@ function ServerNewTankAdd(data) {
         ////////////////NEW TANK///////////////
 
         let newTankObj = new Tank(startPos, c, data[d].tankid, data[d].playername);
-        let defaultGun = new rpg();
+        newTankObj.damageTaken = data[d].damageTaken;
+        newTankObj.shield = data[d].shield;
+        let defaultGun = new machinegun();
         newTankObj.assignWeapon(defaultGun);
         tanks.push(newTankObj);
         tanks = sortTanks(tanks.filter(t => !t.destroyed));
@@ -346,6 +377,11 @@ function ServerNewTankAdd(data) {
     }
   }
 
+}
+
+function ServerSyncTanks(tanks) {
+  tanks = sortTanks(tanks);
+  console.log(tanks);
 }
 
 function ServerTankRemove(socketid) {
@@ -404,9 +440,8 @@ function ServerNewShot(data) {
 
 function ServerMoveShot(data) {
   // console.log('moving shot')
-  if (DEBUG && DEBUG == 1)
+  // if (DEBUG && DEBUG == 1)
     // console.log('Move Shot: ' + data);
-
     for (var i = shots.length - 1; i >= 0; i--) {
       if (shots[i].shotid == data.shotid) {
         shots[i].pos.x = Number(data.x);
@@ -418,14 +453,16 @@ function ServerMoveShot(data) {
 
 //Taken Damage
 function ServerDamageTaken(data) {
+  // console.log(data);
   let id = data.tankid;
   let damage = data.damageTaken;
-  let tank = sortTanks(tanks).find(t=>t.tankid==id);
+  let shield = data.shield;
+  let tank = sortTanks(tanks).find(t => t.tankid == id);
   if (!tank) return;
-  let index = sortTanks(tanks).findIndex(t=>t.tankid==id);
+  let index = sortTanks(tanks).findIndex(t => t.tankid == id);
   tank.damageTaken = damage;
+  tank.shield = shield;
   tanks[index] = tank;
-  console.log('E')
 }
 
 
@@ -460,23 +497,23 @@ function ServerBuzzSawMove(data) {
   }
 }
 //switches weapons ,there can never be more than 3 weapons onscreen at a time 
-// function switchWeapon() {
-//   if (weapons.length < 3) {
-//     let r = round(random(0, 3))
-//     let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
-//     let rpgTemp = new rpg(random(0, 600), random(0, 600));
-//     let sniperTemp = new sniper(random(0, 600), random(0, 600));
-//     if (r == 1) {
-//       weapons.push(machinegunTemp);
-//     }
-//     else if (r == 2) {
-//       weapons.push(rpgTemp);
-//     }
-//     else if (r == 3) {
-//       weapons.push(sniperTemp);
-//     }
-//   }
-// }
+function switchWeapon() {
+  if (weapons.length < 3) {
+    let r = round(random(0, 3))
+    let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
+    let rpgTemp = new rpg(random(0, 600), random(0, 600));
+    let sniperTemp = new sniper(random(0, 600), random(0, 600));
+    if (r == 1) {
+      weapons.push(machinegunTemp);
+    }
+    else if (r == 2) {
+      weapons.push(rpgTemp);
+    }
+    else if (r == 3) {
+      weapons.push(sniperTemp);
+    }
+  }
+}
 //switches the medkit and shield can never be more than 2 onscreen at a time 
 function switchPowerUp() {
   if (powerups.length < 2) {
@@ -504,8 +541,6 @@ function checkIfTankWeaponCollide() {
         t.assignWeapon(w)
         weaponsToDelete.push(w);
         clearInterval(loop);
-        key = ' ';
-        keyPressed();
         //tanks = sortTanks(tanks);
         //tanks.findIndex(t=>t.tankid==socketID)
         // if (iterate) console.log(tanks[myTankIndex].currentweapon);
@@ -522,7 +557,7 @@ function checkIfTankPowerUpCollide() {
   // console.log(weapons)
   powerups.map(w => {
     tanks.map(t => {
-      console.log(t)
+      // console.log(t)
       if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
         t.assignPowerup(w)
         weaponsToDelete.push(w);
@@ -532,18 +567,4 @@ function checkIfTankPowerUpCollide() {
     })
   });
   powerups = powerups.filter(powerups => !weaponsToDelete.includes(powerups));
-}
-function updateWeapons(){
-  for(let i = 0; i < dataWeapons.length; i++){
-    if(dataWeapons[i].type == 1 ){
-     weapons.push(new machinegun(dataWeapons[i].x,dataWeapons[i].y))
-    }
-    else if(dataWeapons[i].type == 2){
-      weapons.push(new rpg(dataWeapons[i].x,dataWeapons[i].y)) 
-    }
-    else if(dataWeapons[i].type == 3){
-      weapons.push(new sniper(dataWeapons[i].x,dataWeapons[i].y)) 
-    }
-  }
-  
 }

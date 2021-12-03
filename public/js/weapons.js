@@ -31,11 +31,11 @@ class sniper extends boosters {
         super();
         this.type = 'sniper'; 
         this.damage = 10;
-        this.bulletRadius = 16;
+        this.bulletRadius = 26;
         this.delay = 10;
         this.xpos = x;
         this.ypos = y;
-        this.bulletColor = { r: 0, g: 255, b: 0 };
+        this.bulletColor = { r: 0, g: 240, b: 240 };
         this.text = 'Sniper';
         this.fill = { r: 0, g: 255, b: 0 }
     }

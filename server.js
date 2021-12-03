@@ -82,54 +82,58 @@ io.sockets.on('connection',
     );
 
     // Connected client adding New Tank
-    socket.on('ClientNewTank',
-      function (data) {
+    socket.on('ClientNewTank', function (data) {
+      // Data comes in as whatever was sent, including objects
+      console.log('New Tank: ' + JSON.stringify(data));
 
-        // Data comes in as whatever was sent, including objects
-        console.log('New Tank: ' + JSON.stringify(data));
-
-        // Add new tank to array
-        // First check if this tank is already in our list
-        var tankFound = false;
-        if (tanks !== undefined) {
-          for (var i = 0; i < tanks.length; i++) {
-            if (tanks[i].tankid == data.tankid) {
-              tankFound = true;
-            }
+      // Add new tank to array
+      // First check if this tank is already in our list
+      var tankFound = false;
+      if (tanks !== undefined) {
+        for (var i = 0; i < tanks.length; i++) {
+          if (tanks[i].tankid == data.tankid) {
+            tankFound = true;
           }
         }
-
-        let newTank = {
-          x: Number(data.x), y: Number(data.y),
-          heading: Number(data.heading), tankColor: data.tankColor,
-          tankid: data.tankid, playername: data.playername,
-          damageTaken: 0
-        };
-        // let newTank = new Tank([data.x, data.y], data.tankColor, data.tankid, data.playerName)
-
-        // Add this tank to the end of the array if not in array
-        if (!tankFound)
-          tanks.push(newTank);
-
-        if (DEBUG && DEBUG == 1)
-          console.log(tanks);
-
-        // Send the tank update after giving a quick delay for initialization
-        const timeoutObj = setTimeout(() => {
-          // Send to all clients but sender socket
-          //          socket.broadcast.emit('ServerNewTankAdd', tanks);
-          io.sockets.emit('ServerNewTankAdd', tanks);
-        }, 1500);
-
-
-        // If the buzzsaw target is not designated, set its target
-        if (buzzSawTarget < 0 && tanks.length > 0) {
-          this.buzzSawTarget = Math.floor(Math.random() * Math.floor(tanks.length));
-          io.sockets.emit('ServerBuzzSawNewChaser', tanks[this.buzzSawTarget].tankid);
-        }
       }
-    );
 
+      let newTank = {
+        x: Number(data.x), y: Number(data.y),
+        heading: Number(data.heading), tankColor: data.tankColor,
+        tankid: data.tankid, playername: data.playername,
+        damageTaken: 0, shield: 30
+      };
+      // let newTank = new Tank([data.x, data.y], data.tankColor, data.tankid, data.playerName)
+
+      // Add this tank to the end of the array if not in array
+      if (!tankFound)
+        tanks.push(newTank);
+
+      if (DEBUG && DEBUG == 1)
+        console.log(tanks);
+
+      // Send the tank update after giving a quick delay for initialization
+      const timeoutObj = setTimeout(() => {
+        // Send to all clients but sender socket
+        //          socket.broadcast.emit('ServerNewTankAdd', tanks);
+        io.sockets.emit('ServerNewTankAdd', tanks);
+      }, 1500);
+
+
+      // If the buzzsaw target is not designated, set its target
+      if (buzzSawTarget < 0 && tanks.length > 0) {
+        this.buzzSawTarget = Math.floor(Math.random() * Math.floor(tanks.length));
+        io.sockets.emit('ServerBuzzSawNewChaser', tanks[this.buzzSawTarget].tankid);
+      }
+    });
+
+    socket.on('SyncTank', tank => {
+      let tIndex = tanks.findIndex(t => t.tankid == tank.tankid);
+      if (tIndex < 0) return console.log('bad', tIndex);
+      if (tanks[tIndex]) tanks[tIndex] = tank;
+      io.sockets.emit('ServerSyncTanks', tanks);
+      // console.log(tanks);
+    })
 
     // Connected client moving Tank
     socket.on('ClientMoveTank',
@@ -176,10 +180,14 @@ io.sockets.on('connection',
 
     });
 
+    socket.on('ClientDamageTaken', data => {
+      io.sockets.emit('ServerDamageTaken', data);
+    })
+
     // New Shot Object
     socket.on('ClientNewShot',
       function (data) {
-        
+
         // Data comes in as whatever was sent, including objects
         if (DEBUG && DEBUG == 1)
           console.log('New Shot: ' + JSON.stringify(data));
@@ -234,13 +242,17 @@ io.sockets.on('connection',
               }
               // It was a hit, remove the tank and shot
               // and tell everyone else its gone too
-            
+
               if (shots[i])
                 if (!shots[i].used) {
                   if (!tanks[t]) return;
-                  tanks[t].damageTaken += shots[i].damage;
-                  console.log('Tank: ', tanks[t].damageTaken);
+                  if (tanks[t].shield > 0) tanks[t].shield -= shots[i].damage
+                  else {
+                    tanks[t].damageTaken += shots[i].damage;
+                    console.log('Tank: ', tanks[t].damageTaken);
+                  }
                   io.sockets.emit('ServerDamageTaken', {
+                    shield: tanks[t].shield,
                     damageTaken: tanks[t].damageTaken,
                     tankid: tanks[t].tankid
                   });
@@ -321,11 +333,4 @@ io.sockets.on('connection',
         socket.broadcast.emit('ServerBuzzSawMove', data);
       });
   });
-  function switchWeaponsArray(data){
-    if (data.length < 3) {
-      let r = Math.round(Math.random()*3)
-      let tempWeapon = {x:Math.round(Math.random()*600),y:Math.round(Math.random()*600),type:r}
-     data.push(tempWeapon);
-     return data;
-    }
-  }
+

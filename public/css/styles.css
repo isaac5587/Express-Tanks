@@ -41,9 +41,9 @@ a {
   margin: 0 auto -7rem;
   position: relative;
 }
-
 footer, .push {
   height: 7rem;
+  user-select: none;
 }
 
 footer .footer-contents {

@@ -5,7 +5,7 @@ class shield extends boosters {
         this.xpos = x;
         this.ypos = y;
         this.fill = { r: 0, g: 0, b: 255 }
-        this.text = 'shield'
+        this.text = 'Shield'
     }
 }
 class medkit extends boosters {
@@ -15,6 +15,6 @@ class medkit extends boosters {
         this.xpos = x;
         this.ypos = y;
         this.fill = { r: 0, g: 255, b: 0 }
-        this.text = 'medkit'
+        this.text = 'Medkit'
     }
 }

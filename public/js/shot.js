@@ -15,7 +15,7 @@ class Shot {
   }
 
   // Render the shot to the screen
-  render(r) {
+  render(radius) {
     push();
 
     // Original shots
@@ -27,7 +27,7 @@ class Shot {
     stroke(255);
     fill(this.color);
     strokeWeight(1);
-    ellipse(this.pos.x - 2, this.pos.y - 2, r, r);
+    ellipse(this.pos.x - 2, this.pos.y - 2, radius, radius);
     point(this.pos.x, this.pos.y);
     pop();
   }

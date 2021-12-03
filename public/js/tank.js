@@ -2,9 +2,9 @@ var tankWidth = 20;
 var tankHeight = 30; class Tank {
   constructor(startPos, tankColor, tankid, playerName) {
     this.shots = [];
-    this.bulletRadius = 10;
+    this.bulletRadius = 8;
     this.pos = startPos;
-    this.r = 20;
+    this.r = 8;
     this.heading = 0;
     this.rotation = 0;
     this.vel = createVector(0, 0);
@@ -15,7 +15,7 @@ var tankHeight = 30; class Tank {
     this.playerName = playerName;
     this.damageTaken = 0;
     this.delay = 5;
-    this.damage = 2;
+    this.damage = 5;
     this.currentPowerup = false;
     this.assignPowerup = (powerup) => {
       this.currentPowerup = powerup
@@ -30,6 +30,7 @@ var tankHeight = 30; class Tank {
     this.count = this.delay;
     this.damage = this.currentweapon.damage;
     this.show = true;
+    this.shield = 30;
     setInterval(() => {
       this.count--;
     }, 100);
@@ -95,7 +96,7 @@ var tankHeight = 30; class Tank {
 
     push();
     translate(this.pos.x, this.pos.y);
-    fill(this.tankColor);
+    fill(0, 0, 0);
     textAlign(CENTER);
     if (DEBUG && DEBUG == 1)
       text(this.tankid, 0, 30);
@@ -103,12 +104,13 @@ var tankHeight = 30; class Tank {
       text(this.playerName, 0, 30);
     strokeWeight(4);
     strokeCap(ROUND);
-    stroke(255, 0, 0);//red
+    stroke(255, 0, 0);//red (Background)
     line(-13, 20, 17, 20);
-    stroke(0, 255, 0);//green
+    stroke(0, 255, 0);//green (Health)
     if (this.damageTaken >= 30) stroke(255, 0, 0);
-    strokeCap(ROUND);
-    line(-13, 20, 17 - (this.damageTaken), 20);
+    line(-13, 20, 17 - this.damageTaken, 20);
+    stroke(0, 157, 255);//blue (Shield)
+    if (this.shield > 0) line(-13, 20, -13 + this.shield, 20);
     pop();
   }
 
@@ -140,10 +142,25 @@ var tankHeight = 30; class Tank {
     }
     this.pos.add(this.vel);
     if (this.currentPowerup != false) {
-      if (this.currentPowerup.type = 'medkit') {
+      if (this.currentPowerup.type == 'medkit') {
         this.currentPowerup = false;
         this.damageTaken = 0;
-      }
+        console.log(this);
+      } else if (this.currentPowerup.type == 'shield') {
+        this.currentPowerup = false;
+        this.shield = 30;
+      };
+      // let TankObj = {
+      //   x: this.pos.x, y: this.pos.y,
+      //   heading: this.heading, tankColor: this.tankColor,
+      //   tankid: this.tankid, damageTaken: this.damageTaken,
+      //   shield: this.shield, bulletRadius: this.bulletRadius
+      // }
+      socket.emit('ClientDamageTaken', {
+        shield: this.shield,
+        damageTaken: this.damageTaken,
+        tankid: this.tankid
+      }); //sync Client and Server: Tank DamageTaken and Shield
     }
   }
 }
