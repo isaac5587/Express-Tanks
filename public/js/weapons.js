@@ -54,7 +54,7 @@ class rpg extends boosters {
     constructor(x, y) {
         super();
         this.type = 'rpg'; 
-        this.damage = 30;
+        this.damage = 35;
         this.bulletRadius = 50;
         this.delay = 20;
         this.xpos = x;

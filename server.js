@@ -9,12 +9,16 @@ const request = require('request');
 var tanks = [];
 var shots = [];
 var buzzSawTarget = -1;
-var DEBUG = 1;
+var DEBUG = 0;
+var weapons = []; //All weapons in the game
+var powerups = [];//All powerups in the game
 
 // Set up the server
 // process.env.PORT is related to deploying on AWS
 var server = app.listen(process.env.PORT || 3000, listen);
 module.exports = server;
+
+
 
 // This call back just tells us that the server has started
 function listen() {
@@ -175,7 +179,7 @@ io.sockets.on('connection',
     // New Shot Object
     socket.on('ClientNewShot',
       function (data) {
-
+        
         // Data comes in as whatever was sent, including objects
         if (DEBUG && DEBUG == 1)
           console.log('New Shot: ' + JSON.stringify(data));
@@ -230,10 +234,7 @@ io.sockets.on('connection',
               }
               // It was a hit, remove the tank and shot
               // and tell everyone else its gone too
-              if (tanks[t].damageTaken >= 30) {
-                io.sockets.emit('ServerTankRemove', tanks[t].tankid);
-                tanks.splice(t, 1);
-              }
+            
               if (shots[i])
                 if (!shots[i].used) {
                   if (!tanks[t]) return;
@@ -246,6 +247,10 @@ io.sockets.on('connection',
                   shots[i].used = true;
                 }
               shots.splice(i, 1);
+              if (tanks[t].damageTaken >= 30) {
+                io.sockets.emit('ServerTankRemove', tanks[t].tankid);
+                tanks.splice(t, 1);
+              }
               // console.log('Shot: ', shots[i].damage);
               // just return for now to keep from unknown errors
               return;
@@ -316,3 +321,11 @@ io.sockets.on('connection',
         socket.broadcast.emit('ServerBuzzSawMove', data);
       });
   });
+  function switchWeaponsArray(data){
+    if (data.length < 3) {
+      let r = Math.round(Math.random()*3)
+      let tempWeapon = {x:Math.round(Math.random()*600),y:Math.round(Math.random()*600),type:r}
+     data.push(tempWeapon);
+     return data;
+    }
+  }

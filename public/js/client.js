@@ -5,6 +5,7 @@ let deadTanks = [];
 let shots = []; // All shots in the game
 let weapons = []; //All weapons in the game
 let powerups = [];//All powerups in the game
+let dataWeapons = [{x:300,y:300,r:2}];
 var weaponIndex = 0;
 var socketID;
 var mytankid;
@@ -15,7 +16,7 @@ var socket;
 var oldTankx, oldTanky, oldTankHeading;
 var fps = 60; // Frames per second
 var PlayerName = "";
-var DEBUG = 1;
+var DEBUG = 0;
 var loopCount = 0.0;  // Keep a running counter to handle animations
 let loop;
 
@@ -39,10 +40,7 @@ const soundLib = new sounds();
 // Initial Setup
 function setup() {
 
-  setInterval(() => {
-    switchWeapon();
-    switchPowerUp();
-  }, 10000);
+ 
 
   // Start the audio context on a click/touch event
   userStartAudio().then(function () {
@@ -121,6 +119,9 @@ function draw() {
   //check if the tank collides with a powerup if so assign to tank
   checkIfTankPowerUpCollide();
   //weapon show
+  for (i = 0; i < dataWeapons.length; i++) {
+   updateWeapons();
+  }
   for (i = 0; i < weapons.length; i++) {
     weapons[i].show();
   }
@@ -427,6 +428,7 @@ function ServerDamageTaken(data) {
   console.log('E')
 }
 
+
 // Handle a restart command
 function Restart() {
   socket.emit('ClientResetAll');
@@ -458,23 +460,23 @@ function ServerBuzzSawMove(data) {
   }
 }
 //switches weapons ,there can never be more than 3 weapons onscreen at a time 
-function switchWeapon() {
-  if (weapons.length < 3) {
-    let r = round(random(0, 3))
-    let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
-    let rpgTemp = new rpg(random(0, 600), random(0, 600));
-    let sniperTemp = new sniper(random(0, 600), random(0, 600));
-    if (r == 1) {
-      weapons.push(machinegunTemp);
-    }
-    else if (r == 2) {
-      weapons.push(rpgTemp);
-    }
-    else if (r == 3) {
-      weapons.push(sniperTemp);
-    }
-  }
-}
+// function switchWeapon() {
+//   if (weapons.length < 3) {
+//     let r = round(random(0, 3))
+//     let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
+//     let rpgTemp = new rpg(random(0, 600), random(0, 600));
+//     let sniperTemp = new sniper(random(0, 600), random(0, 600));
+//     if (r == 1) {
+//       weapons.push(machinegunTemp);
+//     }
+//     else if (r == 2) {
+//       weapons.push(rpgTemp);
+//     }
+//     else if (r == 3) {
+//       weapons.push(sniperTemp);
+//     }
+//   }
+// }
 //switches the medkit and shield can never be more than 2 onscreen at a time 
 function switchPowerUp() {
   if (powerups.length < 2) {
@@ -530,4 +532,18 @@ function checkIfTankPowerUpCollide() {
     })
   });
   powerups = powerups.filter(powerups => !weaponsToDelete.includes(powerups));
+}
+function updateWeapons(){
+  for(let i = 0; i < dataWeapons.length; i++){
+    if(dataWeapons[i].type == 1 ){
+     weapons.push(new machinegun(dataWeapons[i].x,dataWeapons[i].y))
+    }
+    else if(dataWeapons[i].type == 2){
+      weapons.push(new rpg(dataWeapons[i].x,dataWeapons[i].y)) 
+    }
+    else if(dataWeapons[i].type == 3){
+      weapons.push(new sniper(dataWeapons[i].x,dataWeapons[i].y)) 
+    }
+  }
+  
 }
