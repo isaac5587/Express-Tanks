@@ -2,6 +2,7 @@
 var express = require('express');
 var app = express();
 const request = require('request');
+let { rpg, sniper, machinegun } = require('./public/js/weapons');
 //const Hapi = require( "hapi" );
 //const routes = require( "./routes" );
 
@@ -10,8 +11,8 @@ var tanks = [];
 var shots = [];
 var buzzSawTarget = -1;
 var DEBUG = 0;
-var weapons = []; //All weapons in the game
-var powerups = [];//All powerups in the game
+var serverWeapons = []; //All weapons in the game
+var serverPowerups = [];//All powerups in the game
 
 // Set up the server
 // process.env.PORT is related to deploying on AWS
@@ -84,6 +85,7 @@ io.sockets.on('connection',
     // Connected client adding New Tank
     socket.on('ClientNewTank', function (data) {
       // Data comes in as whatever was sent, including objects
+      serverSwitchWeapons();
       console.log('New Tank: ' + JSON.stringify(data));
 
       // Add new tank to array
@@ -271,6 +273,14 @@ io.sockets.on('connection',
         }
 
       });
+    //update serverWeapons
+    socket.on('ServerWeapons', data => {
+      serverWeapons = data;
+    })
+    //update serverPowerups
+    socket.on('ServerPowerups', data => {
+      serverPowerups = data;
+    })
 
     // Connected client moving Shots
     socket.on('ClientRemoveShot',
@@ -333,4 +343,39 @@ io.sockets.on('connection',
         socket.broadcast.emit('ServerBuzzSawMove', data);
       });
   });
+//make the type skeletons and send to client
+setInterval(serverSwitchWeapons, 1000);
+setInterval(serverSwitchPowerups, 1000);
+//generates data for the client to render weapons
+function serverSwitchWeapons() {
+  if (serverWeapons.length < 3) {
+    let r = Math.round(Math.random() * 3);
+    if (r == 1) {
+      serverWeapons.push({ x: Math.round(Math.random() * 600), y: Math.round(Math.random() * 600), type: 'machinegun' })
+    }
+    else if (r == 2) {
+      serverWeapons.push({ x: Math.round(Math.random() * 600), y: Math.round(Math.random() * 600), type: 'rpg' })
+    }
+    else if (r == 3) {
+      serverWeapons.push({ x: Math.round(Math.random() * 600), y: Math.round(Math.random() * 600), type: 'sniper' })
+    }
+  }
+  io.sockets.emit('ServerWeapons', serverWeapons);
+}
+//generates data for the client to render powerups
+function serverSwitchPowerups() {
+  if (serverPowerups.length < 2) {
+    let r = Math.round(Math.random() * 2);
+    if (r == 1) {
+      serverPowerups.push({ x: Math.round(Math.random() * 600), y: Math.round(Math.random() * 600), type: 'shield' })
+    }
+    else if (r == 2) {
+      serverPowerups.push({ x: Math.round(Math.random() * 600), y: Math.round(Math.random() * 600), type: 'medkit' })
+    }
+  }
+  io.sockets.emit('ServerPowerups', serverPowerups);
+}
+
+
+
 

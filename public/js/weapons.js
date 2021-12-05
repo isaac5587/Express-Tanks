@@ -1,3 +1,4 @@
+//base class
 class boosters {
     constructor() {
     }
@@ -37,7 +38,7 @@ class sniper extends boosters {
         this.ypos = y;
         this.bulletColor = { r: 0, g: 240, b: 240 };
         this.text = 'Sniper';
-        this.fill = { r: 0, g: 255, b: 0 }
+        this.fill = { r: 0, g: 240, b: 240 }
     }
     // show() {
     //     push()

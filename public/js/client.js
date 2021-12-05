@@ -1,16 +1,16 @@
 var win;
 //var tank; // Just this instance of the tank
 let tanks = []; // All tanks in the game
-let deadTanks = [];
+let deadTanks = [];//All dead tanks
 let shots = []; // All shots in the game
 let weapons = []; //All weapons in the game
 let powerups = [];//All powerups in the game
-var weaponIndex = 0;
+let dataWeapons = [];//All weapon skeletons
+let dataPowerups = [];//All powerup skeletons in the game
 var socketID;
 var mytankid;
 var myTankIndex = -1;
 var buzz = undefined;
-var powerUpCount = 0;
 var socket;
 var oldTankx, oldTanky, oldTankHeading;
 var fps = 60; // Frames per second
@@ -38,12 +38,6 @@ const soundLib = new sounds();
 
 // Initial Setup
 function setup() {
-  setInterval(() => {
-    switchWeapon();
-    switchPowerUp();
-  }, 1000);
-
-
   // Start the audio context on a click/touch event
   userStartAudio().then(function () {
     // Audio context is started - Preload any needed sounds
@@ -87,6 +81,8 @@ function setup() {
   socket.on('ServerBuzzSawMove', ServerBuzzSawMove);
   socket.on('ServerDamageTaken', ServerDamageTaken);
   socket.on('ServerSyncTanks', ServerSyncTanks);
+  socket.on('ServerWeapons', ServerWeapons);
+  socket.on('ServerPowerups',ServerPowerups);
 
   // Join (or start) a new game //OnConnect
   socket.on('connect', data => {
@@ -117,7 +113,10 @@ function setup() {
 // Draw the screen and process the position updates
 function draw() {
   background(155, 155, 155);
-  //check if the tank collides with a weapon if so assign that weapon t0 the tank
+  //update datatypes to p5 objects
+  setInterval(weaponsUpdate(),1000);
+  setInterval(powerupsUpdate(),1000);
+  //check if the tank collides with a weapon if so assign that weapon to the tank
   checkIfTankWeaponCollide();
   //check if the tank collides with a powerup if so assign to tank
   checkIfTankPowerUpCollide();
@@ -441,14 +440,14 @@ function ServerNewShot(data) {
 function ServerMoveShot(data) {
   // console.log('moving shot')
   // if (DEBUG && DEBUG == 1)
-    // console.log('Move Shot: ' + data);
-    for (var i = shots.length - 1; i >= 0; i--) {
-      if (shots[i].shotid == data.shotid) {
-        shots[i].pos.x = Number(data.x);
-        shots[i].pos.y = Number(data.y);
-        break;
-      }
+  // console.log('Move Shot: ' + data);
+  for (var i = shots.length - 1; i >= 0; i--) {
+    if (shots[i].shotid == data.shotid) {
+      shots[i].pos.x = Number(data.x);
+      shots[i].pos.y = Number(data.y);
+      break;
     }
+  }
 }
 
 //Taken Damage
@@ -496,75 +495,95 @@ function ServerBuzzSawMove(data) {
     buzz.velocity.y = data.yvel;
   }
 }
-//switches weapons ,there can never be more than 3 weapons onscreen at a time 
-function switchWeapon() {
-  if (weapons.length < 3) {
-    let r = round(random(0, 3))
-    let machinegunTemp = new machinegun(random(0, 600), random(0, 600));
-    let rpgTemp = new rpg(random(0, 600), random(0, 600));
-    let sniperTemp = new sniper(random(0, 600), random(0, 600));
-    if (r == 1) {
-      weapons.push(machinegunTemp);
-    }
-    else if (r == 2) {
-      weapons.push(rpgTemp);
-    }
-    else if (r == 3) {
-      weapons.push(sniperTemp);
-    }
-  }
+//sync client to server
+function ServerWeapons(serverWeapons) {
+  dataWeapons = serverWeapons;
 }
-//switches the medkit and shield can never be more than 2 onscreen at a time 
-function switchPowerUp() {
-  if (powerups.length < 2) {
-    let r = round(random(0, 2))
-    let shieldTemp = new shield(random(0, 600), random(0, 600));
-    let medkitTemp = new medkit(random(0, 600), random(0, 600));
-    if (r == 1) {
-      powerups.push(shieldTemp);
-    }
-    else if (r == 2) {
-      powerups.push(medkitTemp);
-    }
+//sync client to server
+function ServerPowerups(serverPowerups) {
+  dataPowerups = serverPowerups;
+}
 
-  }
-}
+//check if the tank collides with a weapon if so update serverside
 function checkIfTankWeaponCollide() {
   let weaponsToDelete = [];
-  if (!weapons.length) return;
-  // console.log(weapons)
-  weapons.map(w => {
+  if (!dataWeapons.length) return;
+  dataWeapons.map(w => {
     tanks.map(t => {
       // let iterate = true;
       if (t.destroyed || tanks.findIndex(t => t.tankid == socketID) < 0) iterate = false;
-      if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
-        t.assignWeapon(w)
-        weaponsToDelete.push(w);
+      if (dist(w.x, w.y, t.pos.x, t.pos.y) < 25) {
+        
+       if(w.type == 'machinegun'){
+        t.assignWeapon(new machinegun(w.x,w.y));
+       }
+       else if(w.type == 'rpg'){
+        t.assignWeapon(new rpg(w.x,w.y));
+       }
+       else if(w.type == 'sniper'){
+        t.assignWeapon(new sniper(w.x,w.y)); 
+       }
+         weaponsToDelete.push(w);
         clearInterval(loop);
         //tanks = sortTanks(tanks);
         //tanks.findIndex(t=>t.tankid==socketID)
         // if (iterate) console.log(tanks[myTankIndex].currentweapon);
-
+       //serverWeapons = dataWeapons
       }
     })
   });
-  weapons = weapons.filter(weapon => !weaponsToDelete.includes(weapon));
-}
-
+  dataWeapons = dataWeapons.filter(dataWeapons => !weaponsToDelete.includes(dataWeapons));
+  socket.emit('ServerWeapons', dataWeapons);
+ }
+//check if tank collides with a powerup if so update serverside
 function checkIfTankPowerUpCollide() {
-  let weaponsToDelete = [];
-  if (!powerups.length) return;
+  let powerupsToDelete = [];
+  if (!dataPowerups.length) return;
   // console.log(weapons)
-  powerups.map(w => {
+  dataPowerups.map(w => {
     tanks.map(t => {
       // console.log(t)
-      if (dist(w.xpos, w.ypos, t.pos.x, t.pos.y) < 25) {
-        t.assignPowerup(w)
-        weaponsToDelete.push(w);
+      if (dist(w.x, w.y, t.pos.x, t.pos.y) < 25) {
+
+        if(w.type == 'shield'){
+          t.assignPowerup(new shield(w.x,w.y));
+         }
+         else if(w.type == 'medkit'){
+          t.assignPowerup(new medkit(w.x,w.y));
+         }
+        powerupsToDelete.push(w);
         clearInterval(loop);
 
       }
     })
   });
-  powerups = powerups.filter(powerups => !weaponsToDelete.includes(powerups));
+  dataPowerups = dataPowerups.filter(dataPowerups => !powerupsToDelete.includes(dataPowerups));
+  socket.emit('ServerPowerups', dataPowerups);
+}
+//updates weapons array
+function weaponsUpdate(){
+  weapons = [];
+ for(i = 0;i < dataWeapons.length;i++){
+   if(dataWeapons[i].type == 'rpg'){
+     weapons.push(new rpg(dataWeapons[i].x,dataWeapons[i].y))
+   }
+   else if(dataWeapons[i].type == 'machinegun'){
+    weapons.push(new machinegun(dataWeapons[i].x,dataWeapons[i].y))
+   }
+   else if(dataWeapons[i].type == 'sniper'){
+    weapons.push(new sniper(dataWeapons[i].x,dataWeapons[i].y))
+   }
+ }
+}
+//updates powerups array
+function powerupsUpdate(){
+  powerups = [];
+ for(i = 0;i < dataPowerups.length;i++){
+   if(dataPowerups[i].type == 'shield'){
+     powerups.push(new shield(dataPowerups[i].x,dataPowerups[i].y))
+   }
+   else if(dataPowerups[i].type == 'medkit'){
+    powerups.push(new medkit(dataPowerups[i].x,dataPowerups[i].y))
+   }
+ }
 }
