@@ -117,7 +117,7 @@ var tankHeight = 30; class Tank {
   // Moving tank
   moveForward(a) {
     var force = p5.Vector.fromAngle(this.heading);
-    force.mult(a);
+    force.mult(a * 5); // added this to make the tanks move faster 
     this.vel.add(force);
   }
 
@@ -128,7 +128,7 @@ var tankHeight = 30; class Tank {
   }
 
   setRotation(a) {
-    this.rotation = a;
+    this.rotation = a * 2;
   }
 
   turn() {

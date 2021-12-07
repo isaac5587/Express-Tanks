@@ -116,6 +116,7 @@ function draw() {
   //update datatypes to p5 objects
   setInterval(weaponsUpdate(),1000);
   setInterval(powerupsUpdate(),1000);
+  
   //check if the tank collides with a weapon if so assign that weapon to the tank
   checkIfTankWeaponCollide();
   //check if the tank collides with a powerup if so assign to tank

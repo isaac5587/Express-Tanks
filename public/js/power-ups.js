@@ -1,3 +1,5 @@
+//classes for the shield and medkit
+
 class shield extends boosters {
     constructor(x, y) {
         super(true);

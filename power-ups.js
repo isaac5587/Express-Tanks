@@ -1,3 +1,7 @@
+
+
+//classes for the shield and medkit
+
 class shield extends boosters {
     constructor(x, y) {
         this.xpos = x;

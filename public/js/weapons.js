@@ -12,7 +12,7 @@ class boosters {
     }
 }
 
-class machinegun extends boosters {
+class machinegun extends boosters { //subclass of boosters
     constructor(x, y) {
         super();
         this.type = 'machinegun'; 
@@ -27,7 +27,7 @@ class machinegun extends boosters {
     }
 }
 
-class sniper extends boosters {
+class sniper extends boosters { //subclass of boosters
     constructor(x, y) {
         super();
         this.type = 'sniper'; 
@@ -51,7 +51,7 @@ class sniper extends boosters {
 }
 
 
-class rpg extends boosters {
+class rpg extends boosters {  //subclass of boosters
     constructor(x, y) {
         super();
         this.type = 'rpg'; 
